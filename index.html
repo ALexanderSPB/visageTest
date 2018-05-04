@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		
+	</head>
+<body>
+	<header>
+		<h1>Face Tracker Visage</h1>
+		<link rel="stylesheet" href="shadematcher.css">
+		<h2 id="uploadFile">Upload Photo</h2>
+		<input name="myFile" type="file" id="fileInput">
+	</header>
+	<div id="status">Downloading...</div>
+	<div>
+		<progress value="0" max="100" id="progress" hidden=1 ></progress>
+	</div>
+	<div id="container">
+		<div id="modelContainer">
+			<img src="photos/1.jpg">
+			<img src="photos/2.jpg">
+			<img src="photos/3.jpg">
+			<img src="photos/4.jpg">
+			<img src="photos/5.jpg">
+			<img src="photos/6.jpg">
+		</div>
+		<div id="contentContainer">
+			<canvas id="canvas" style="display: block;"></canvas>
+			<div id="toolsContainer">
+				<div id="data">
+					<p>FPS CALCULATED: <b id="boldStuff">29.3fps</b> </p>
+					<p>STATUS: <b id="myStat">[TRACK_STAT_OFF]</b> </p>
+					<button id="startTracking">Resume</button>
+					<button id="stopTracking">Snap</button>
+					<button id="btnReset">Reset</button>
+				</div>
+				<ul id="foundationControls" class="controls">
+					<li class="control control1" id="applyFoundation1"></li>
+					<li class="control control2" id="applyFoundation2"></li>
+					<li class="control control3" id="applyFoundation3"></li>
+					<li class="control control4" id="applyFoundation4"></li>
+					<li class="control control5" id="applyFoundation5"></li>
+					<li class="control control6" id="applyFoundation6"></li>
+				</ul>
+			</div>
+		</div>
+	</div>
+	<script src="lib/visageSDK.js"></script>
+	<script type="text/javascript" src="opencv_sdk/opencv.js"></script>
+	<script type="text/javascript" src="cvProcessors.js"></script>
+	<script type="text/javascript" src="shadematcherClass.js"></script>
+</body>
+</html> 

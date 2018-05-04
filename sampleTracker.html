@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="https://visagetechnologies-com.loopiasecure.com/wp-content/themes/visage_1.3/style.css" type="text/css" media="all" />
+	<link rel="icon" href="https://visagetechnologies-com.loopiasecure.com/wp-content/themes/visage_1.3/images/visage.ico" />
+</head>
+<body>
+<header>
+	<h1 id="logo" style="float:left;">
+	<a href="http://www.visagetechnologies.com">Visage Technologies<br/><span>Face Tracking & Analysis</span></a>
+	</h1>
+	<h1 style="height:80px;line-height:80px;">
+	Face Tracker for HTML5 DEMO
+	</h1>
+</header>
+<div  id="status" style = "margin-left: 100px; margin-top:10px">Downloading...</div>
+	<div style = "margin-left: 100px; margin-top:10px">
+		<progress value="0" max="100" id="progress" hidden=1 ></progress>  
+	</div>
+</div>
+<div id="container" style="overflow: hidden;margin-left: 100px;">
+	<canvas id="canvas" width="640" height="480" style="float:left;border:1px solid black;-webkit-transform: scaleX(-1);-moz-transform: scaleX(-1);"></canvas>
+	<div id="resume" style="margin-left:50px;float:left;"><a onclick="toggleSlider();"><i><b>Results (Click here):</b></i></a>
+	<div id="panelThatSlides" style="position: relative; left: 0px; background-color: rgb(238, 238, 238); width: 300px; display: none; background-position: initial initial; background-repeat: initial initial;">
+		<div id="contentThatFades" style="position: relative; left: 0px; background-color: rgb(238, 238, 238); width: 300px; display: block; background-position: initial initial; background-repeat: initial initial;">
+			<div id="data">
+			<p>FPS CALCULATED: <b id="boldStuff">29.3fps</b> </p> 
+			<p>FPS FROM TRACKER: <b id="fpsTracker">----</b> </p> 
+			<p>TRANSLATION: <b id="myTrans">----</b> </p>
+			<p>ROTATION: <b id="myRot">----</b> </p>
+			<p>STATUS: <b id="myStat">[TRACK_STAT_OFF]</b> </p>
+			</div>
+		</div>
+	</div>
+</div>
+</div>
+<div id="toolbox" style = "margin-left: 100px; margin-right:auto; margin-top:10px">
+	<select id="myList" onchange="testConfig()">
+	  <option>Facial Features Tracker - High.cfg</option>
+	  <option>Facial Features Tracker - Low.cfg</option>
+	  <option>Head Tracker.cfg</option>
+	</select>
+</div>
+
+<script src="lib/bezier-spline.js"></script>
+
+<script src="lib/visageRendering.js"></script>
+
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script>
+
+<script type='text/javascript'>
+
+function toggleSlider() {
+if ($("#panelThatSlides").is(":visible")) {
+	$("#contentThatFades").fadeOut(600, function(){
+		$("#panelThatSlides").slideUp();
+	});
+}
+if ($("#panelThatSlides2").is(":visible")) {
+	$("#contentThatFades2").fadeOut(600, function(){
+		$("#panelThatSlides2").slideUp();
+	});
+}
+else {
+	$("#panelThatSlides").slideDown(600, function(){
+		$("#contentThatFades").fadeIn();
+	});
+}   
+}
+
+//VARS
+//**********
+var fpsOut = document.getElementById('boldStuff');
+var fpsTracker = document.getElementById('fpsTracker');
+var transOutput = document.getElementById('myTrans'),
+	rotOutput = document.getElementById('myRot'),
+	statOutput = document.getElementById('myStat'),
+	canvas = document.getElementById('canvas');
+
+var mWidth = 0,
+	mHeight = 0;
+	
+var fps = 0,
+	now = 0, 
+	lastUpdate = 0
+	fpsFilter = 50;
+	
+var canCon = canvas.getContext('2d');
+var startTracking = false;
+var draw = true;
+
+//FPS - Refreshes FPS display every 1000ms
+setInterval(function(){
+  fpsOut.innerHTML = fps.toFixed(1) + " fps";
+}, 10);
+
+function testConfig(){
+	var mylist=document.getElementById("myList");
+	var cfgPath = "/lib/"+mylist.options[mylist.selectedIndex].text;
+	m_Tracker.setTrackerConfiguration(cfgPath);
+}
+
+/*
+* Callback method mentioned in the documentation. 
+* Gets executed after all the preparation is done (all the files have been downloaded) and tracker is ready to start tracking.
+* In this case it enables buttons on the page.
+*/
+function callbackDownload()
+{
+	StartTracker();
+}
+
+var timeme = false;
+
+var trackerStates = ["TRACK_STAT_OFF","TRACK_STAT_OK","TRACK_STAT_RECOVERING","TRACK_STAT_INIT"];
+
+var frameSample = [0,0,0,0,0];
+var newSample = [0,0,0,0,0];
+var ppixels,
+	pixels;
+
+/*
+* Compares two samples of 5 pixel values 
+*/
+function checkFrameDuplicate(newSample){
+	for (var i = 0; i <  newSample.length; i+=2){
+		if (newSample[i]!==frameSample[i])
+			return false;
+	}
+	//additional check
+	for (var i = 1; i < newSample.length; i+= 2)
+	{
+		if (newSample[i]!==frameSample[i])
+			return false;
+	}
+	return true;
+}
+
+var fpsLimit = 30;
+var now;
+var then = Date.now();
+var interval = 1000/fpsLimit;
+var delta;
+
+/*
+*Method that is called on every frame via requestAnimationFrame mechanism.
+*Draws camera image on the canvas, takes the pixel data, sends them to the tracker and finally, depending on the result, draws the results.
+*Rudimentary timing is implemented to be activated on button click and it also checks for duplicate frames.
+*/
+function processFrame()
+{
+	window.requestAnimationFrame(processFrame);
+	now = Date.now();
+	delta = now - then;
+	
+	//Limit frame rate according to the fps variable
+	if (delta > interval)
+	{
+		then = now - (delta % interval);
+			
+		canvas.width = mWidth;
+		//Draws an image from cam on the canvas
+		canCon.drawImage(video,0,0,mWidth,mHeight);
+		
+		//Access pixel data
+		imageData = canCon.getImageData(0,0, mWidth, mHeight).data;
+		
+		//Save pixel data to preallocated buffer
+		for(i=0; i<imageData.length; i+=1)
+		{
+			pixels[i] = imageData[i];
+		}
+		
+		//Alternative way to save pixel data, seems faster but not consistent
+		//pixels.set(imageData); 
+		
+		//Call Update() if ready to start tracking and frame is new
+		if (startTracking===true){
+			trackerReturnState = m_Tracker.track(
+			mWidth,
+			mHeight,
+			ppixels, 
+			faceDataArray,
+			Module.VisageTrackerImageFormat.VISAGE_FRAMEGRABBER_FMT_RGBA.value,
+			Module.VisageTrackerOrigin.VISAGE_FRAMEGRABBER_ORIGIN_TL.value, 
+			0,
+			-1, 
+			maxFaces);
+		}
+	
+		//Draw based upon data if tracker status is OK
+		if (startTracking===true && trackerReturnState.get(0)===Module.VisageTrackerStatus.TRACK_STAT_OK.value)
+		{
+			if (draw === true)
+			{
+				var TfaceData = faceDataArray.get(0);
+				drawFaceFeatures(TfaceData);
+				drawGaze(TfaceData);
+				drawFaceModelAxes(TfaceData);
+			}
+								
+		}	
+			
+		transOutput.innerHTML = "[" + faceDataArray.get(0).getFaceTranslation()[0].toFixed(2) +  "," + faceDataArray.get(0).getFaceTranslation()[1].toFixed(2) + "," + faceDataArray.get(0).getFaceTranslation()[2].toFixed(2) +"]";
+		rotOutput.innerHTML = "[" + faceDataArray.get(0).getFaceRotation()[0].toFixed(2) + "," + faceDataArray.get(0).getFaceRotation()[1].toFixed(2) + "," + faceDataArray.get(0).getFaceRotation()[2].toFixed(2) + "]";
+		fpsTracker.innerHTML = faceDataArray.get(0).frameRate.toFixed(2);
+							
+		
+		if (trackerReturnState.get(0) !== Module.VisageTrackerStatus.TRACK_STAT_OK.value)
+		{
+			maleNum = 0;
+			femaleNum = 0;
+		}
+		statOutput.innerHTML = "[" + trackerStates[trackerReturnState.get(0)] + "]";
+		
+		
+		//Calculate FPS
+		var thisFrameFPS = 1000 / ((now=new Date) - lastUpdate);
+		fps += (thisFrameFPS - fps) / fpsFilter;
+		lastUpdate = now;
+	}
+}
+//Function called when Start is clicked, tracking is resumed/started
+function StartTracker(){
+	
+	startTracking = true;
+}
+
+function StopTracker(){
+	startTracking = false;
+}
+
+var m_Tracker;
+var imageData;
+
+var video = document.createElement('video');
+//Mobile safari requirement
+//https://webkit.org/blog/6784/new-video-policies-for-ios/
+video.setAttribute("playsinline", true);
+
+//Handlers for camera communication
+//callback methods for getUserMedia : deniedStream, errorStream, startStream
+//**************************************************************************
+
+//Alerts the user when there is no camera
+function deniedStream(){
+	alert("Camera access denied!");
+}
+//Pushes error to the console when there is error with camera access
+function errorStream(e){
+	if (e){
+		console.error(e);
+	}
+}
+
+function onModuleInitialized()
+{	
+	if (mWidth === 0) {
+		setTimeout(onModuleInitialized, 100);
+		return;
+	}
+	
+	ppixels = Module._malloc(mWidth*mHeight*4);
+	pixels = new Uint8Array(Module.HEAPU8.buffer, ppixels, mWidth*mHeight*4);
+	
+	//set up tracker and licensing, valid license needs to be provided
+	Module.initializeLicenseManager("431-178-039-010-389-293-858-207-135-758-802.vlc");
+	m_Tracker = new Module.VisageTracker("lib/Facial Features Tracker - High.cfg");
+	maxFaces = 1;
+	faceDataArray = new Module.FaceDataVector();
+	for (var i = 0; i < maxFaces; ++i)
+    {
+        faceData = new Module.FaceData();
+        faceDataArray.push_back(faceData);
+    }
+
+	var trackerReturnState = new Module.VectorFloat();
+	trackerReturnState = trackerStates[0];
+	
+	//Use request animation frame mechanism - slower but with smoother animation
+	processFrame();
+}
+
+//Is triggered when cam stream is successfully fetched
+//NOTE: Can be buggy, try to increase the value from 1000ms to some higher value in that case
+function startStream(stream){
+	video.addEventListener('canplay', function DoStuff() {
+		video.removeEventListener('canplay', DoStuff, true);
+		setTimeout(function() {
+			video.play();
+	
+			canvas.width = video.videoWidth;
+			canvas.height = video.videoHeight;
+			
+			mWidth = video.videoWidth;
+			mHeight = video.videoHeight;
+
+		}, 1000);
+	}, true);
+		
+	
+	video.srcObject = stream;
+	video.play();
+}
+					  
+(function() {
+	var i = 0,
+		lastTime = 0,
+		vendors = ['ms', 'moz', 'webkit', 'o'];
+	
+	while (i < vendors.length && !window.requestAnimationFrame) {
+		window.requestAnimationFrame = window[vendors[i] + 'RequestAnimationFrame'];
+		window.cancelAnimationFrame =
+		window[vendors[i]+'CancelAnimationFrame'] || window[vendors[i]+'CancelRequestAnimationFrame'];
+		i++;
+	}
+	if (!window.requestAnimationFrame) {
+		alert("RequestAnimationFrame mechanism is not supported by this browser.");
+	}
+}());
+
+//Here is where the stream is fetched
+try {
+	navigator.mediaDevices.getUserMedia({
+		video: true,
+		audio: false
+	}).then(startStream).catch(deniedStream);
+	} catch (e) {
+		try {
+			navigator.mediaDevices.getUserMedia('video', startStream, deniedStream);
+		} catch (e) {
+			errorStream(e);
+		}
+	}
+video.loop = video.muted = true;
+video.autoplay = true;
+video.load();
+
+
+</script>
+
+<script src="lib/visageSDK.js"></script>
+
+<script>
+var Module = VisageModule({onRuntimeInitialized: onModuleInitialized})
+</script>
+
+</body>
+</html> 
